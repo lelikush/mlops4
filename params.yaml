@@ -15,8 +15,6 @@ data:
   val_jsonl: "data/val.jsonl"
   out_dir: "data/tokenized"
 
-# Вход стадии — выход split из ДЗ 3 (scripts/from_hw3.py, `make data`).
-# Групповой сплит по topic; доли — накопленные цели, группы по убыванию размера.
 hw3:
   split_dir: "../../mlops26-hw3/hw3-broken/data"
   ratios:
@@ -31,10 +29,6 @@ sample:
   seed: 42
 
 tokenize:
-  # По хвосту распределения моего датасета (Qwen3-0.6B, docs/tokenize_report.md):
-  # p99 train 220, p99 val 253, max 274. 232 резал 1.6% val — концы ответов.
-  # 256 >= p99 обоих сплитов; с динамическим паддингом лишние позиции
-  # оплачивают только редкие длинные примеры, а не каждый батч.
   max_seq_len: 256
   truncated_warn_ratio: 0.05
   padding_side: "left"
@@ -45,7 +39,4 @@ packing:
 
 train_estimate:
   epochs: 3
-  # 12.15 ток/с — мой замер ДЗ 1 (docs/bench.json: AMD Ryzen 7 5700U, CPU,
-  # bf16, Qwen3-0.6B, ГЕНЕРАЦИЯ). Обучение медленнее: forward + backward +
-  # optimizer. Реальное число подставляется сюда после первого прогона ДЗ 5.
   tokens_per_sec: 12.15

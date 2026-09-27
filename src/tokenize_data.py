@@ -40,12 +40,7 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def mask_prompt(input_ids: list[int], n_prompt: int) -> list[int]:
-    """labels для лосса: -100 (ignore_index CrossEntropyLoss) на промпте.
-
-    input_ids остаются полными — модель читает промпт целиком, но штраф
-    получает только за ответ. Если обрезка съела часть промпта, n_prompt
-    больше длины — тогда в лосс не попадает ничего.
-    """
+    """labels для лосса."""
     n = min(n_prompt, len(input_ids))
     return [LABEL_PAD_ID] * n + list(input_ids[n:])
 
@@ -55,8 +50,6 @@ def encode_example(tokenizer, record: dict, params: dict, max_seq_len: int) -> d
     messages = record["messages"]
     full_text = build_chat_text(tokenizer, messages, params, add_generation_prompt=False)
 
-    # Промпт — строка inference-пути: ровно то, что модель увидит на генерации.
-    # Граница маски считается по токенам, с запасным путём по офсетам (склейка BPE).
     prompt_text = build_chat_text(tokenizer, messages, params, add_generation_prompt=True)
     encoded = tokenizer(full_text, add_special_tokens=False, return_offsets_mapping=True)
     input_ids = encoded["input_ids"]
@@ -101,10 +94,7 @@ def describe(values: list[int]) -> dict:
 
 
 def truncation_stats(metas: list[dict], name: str, params: dict) -> dict:
-    """Статистика обрезки по max_seq_len — метрика с порогом, а не строчка в логе.
-
-    Считается по ВСЕМ записям сплита, включая выброшенные после обрезки.
-    """
+    """Статистика обрезки по max_seq_len."""
     warn = params["tokenize"]["truncated_warn_ratio"]
     truncated = sum(1 for m in metas if m["truncated"])
     ratio = truncated / len(metas) if metas else 0.0
@@ -316,8 +306,6 @@ def render_report(metrics: dict) -> str:
 def main() -> None:
     params = load_params()
     tokenizer = AutoTokenizer.from_pretrained(params["model"]["name"])
-    # decoder-only: паддинг слева, иначе при batch > 1 между промптом и первым
-    # сгенерированным токеном встают pad. Берётся из params.yaml, не из дефолта токенизатора.
     tokenizer.padding_side = params["tokenize"]["padding_side"]
 
     out_dir = Path(params["data"]["out_dir"])

@@ -3,7 +3,6 @@
 install:
 	uv sync
 
-# Стадия 0 для студента: выход split из ДЗ 3 -> data/train.jsonl, data/val.jsonl.
 data:
 	uv run python -m scripts.from_hw3
 

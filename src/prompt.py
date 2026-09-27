@@ -41,8 +41,6 @@ def build_chat_text(
     `add_generation_prompt=False` — путь обучения: весь диалог вместе
         с ответом и eos.
     """
-    # Оба пути идут через apply_chat_template с одними и теми же kwargs:
-    # шаблон модели — единственный источник формата, второй копии нет.
     if add_generation_prompt:
         messages, _ = split_messages(messages)
     return tokenizer.apply_chat_template(
