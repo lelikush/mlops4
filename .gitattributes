@@ -1,0 +1,2 @@
+# check.sh хэшируется: CRLF на Windows-клоне сменил бы отпечаток
+*.sh text eol=lf

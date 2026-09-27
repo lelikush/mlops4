@@ -1,7 +1,11 @@
-.PHONY: install sample tokenize check clean
+.PHONY: install data sample tokenize check clean
 
 install:
 	uv sync
+
+# Стадия 0 для студента: выход split из ДЗ 3 -> data/train.jsonl, data/val.jsonl.
+data:
+	uv run python -m scripts.from_hw3
 
 # Стадия 0, только для преподавателя: parquet курса -> data/train.jsonl, data/val.jsonl.
 # У студента вход другой — его датасет из ДЗ 3, положенный в те же файлы.

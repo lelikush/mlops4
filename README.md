@@ -38,6 +38,7 @@
 
 ```bash
 uv sync
+make data         # выход split ДЗ 3 -> data/train.jsonl, data/val.jsonl (scripts/from_hw3.py)
 make tokenize     # data/*.jsonl -> data/tokenized/ + metrics + отчёт
 make check        # девять проверок — должны стать зелёными
 ```

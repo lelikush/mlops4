@@ -21,7 +21,7 @@ from transformers import AutoTokenizer
 from src.collate import LABEL_PAD_ID
 from src.config import load_params
 from src.pack import pack_examples, packing_report
-from src.prompt import build_chat_text
+from src.prompt import build_chat_text, prompt_token_len
 
 METRICS_PATH = Path("metrics/tokenize.json")
 REPORT_PATH = Path("docs/tokenize_report.md")
@@ -40,9 +40,14 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def mask_prompt(input_ids: list[int], n_prompt: int) -> list[int]:
-    """labels для лосса."""
-    # TODO: промпт должен быть замаскирован.
-    return list(input_ids)
+    """labels для лосса: -100 (ignore_index CrossEntropyLoss) на промпте.
+
+    input_ids остаются полными — модель читает промпт целиком, но штраф
+    получает только за ответ. Если обрезка съела часть промпта, n_prompt
+    больше длины — тогда в лосс не попадает ничего.
+    """
+    n = min(n_prompt, len(input_ids))
+    return [LABEL_PAD_ID] * n + list(input_ids[n:])
 
 
 def encode_example(tokenizer, record: dict, params: dict, max_seq_len: int) -> dict:
@@ -50,10 +55,14 @@ def encode_example(tokenizer, record: dict, params: dict, max_seq_len: int) -> d
     messages = record["messages"]
     full_text = build_chat_text(tokenizer, messages, params, add_generation_prompt=False)
 
-    encoded = tokenizer(full_text, add_special_tokens=False)
+    # Промпт — строка inference-пути: ровно то, что модель увидит на генерации.
+    # Граница маски считается по токенам, с запасным путём по офсетам (склейка BPE).
+    prompt_text = build_chat_text(tokenizer, messages, params, add_generation_prompt=True)
+    encoded = tokenizer(full_text, add_special_tokens=False, return_offsets_mapping=True)
     input_ids = encoded["input_ids"]
-    # TODO: найти границу промпта и ответа
-    n_prompt, used_fallback = 0, False
+    n_prompt, used_fallback = prompt_token_len(
+        tokenizer, prompt_text, input_ids, encoded["offset_mapping"]
+    )
 
     full_len = len(input_ids)
     truncated = full_len > max_seq_len
@@ -92,10 +101,25 @@ def describe(values: list[int]) -> dict:
 
 
 def truncation_stats(metas: list[dict], name: str, params: dict) -> dict:
-    """Статистика обрезки по max_seq_len."""
-    # TODO: посчитать долю обрезанных и предупредить, если она выше
-    # tokenize.truncated_warn_ratio.
-    return {}
+    """Статистика обрезки по max_seq_len — метрика с порогом, а не строчка в логе.
+
+    Считается по ВСЕМ записям сплита, включая выброшенные после обрезки.
+    """
+    warn = params["tokenize"]["truncated_warn_ratio"]
+    truncated = sum(1 for m in metas if m["truncated"])
+    ratio = truncated / len(metas) if metas else 0.0
+    lost = sum(max(0, m["full_len"] - params["tokenize"]["max_seq_len"]) for m in metas)
+    if ratio > warn:
+        print(
+            f"  ВНИМАНИЕ {name}: обрезано {truncated} из {len(metas)} примеров "
+            f"({ratio:.1%}) при пороге {warn:.1%} — max_seq_len "
+            f"{params['tokenize']['max_seq_len']} мал для этого распределения длин"
+        )
+    return {
+        "truncated": truncated,
+        "truncated_ratio": round(ratio, 4),
+        "truncated_tokens_lost": lost,
+    }
 
 
 def process_split(
@@ -292,7 +316,9 @@ def render_report(metrics: dict) -> str:
 def main() -> None:
     params = load_params()
     tokenizer = AutoTokenizer.from_pretrained(params["model"]["name"])
-    # TODO: tokenize.padding_side из params.yaml сюда так и не доехал
+    # decoder-only: паддинг слева, иначе при batch > 1 между промптом и первым
+    # сгенерированным токеном встают pad. Берётся из params.yaml, не из дефолта токенизатора.
+    tokenizer.padding_side = params["tokenize"]["padding_side"]
 
     out_dir = Path(params["data"]["out_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
